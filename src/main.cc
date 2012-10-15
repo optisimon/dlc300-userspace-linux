@@ -17,16 +17,28 @@
 
 #include <memory>
 
-
 #include "DLC300.h"
 #include "SnapshotHelpers.h"
 #include "GUIHelpers.h"
 
-void saveSnapshot(unsigned char* img, int w, int h, int index)
+
+void saveSnapshot(unsigned char* img, int w, int h, int& saveIndex)
 {
-	SnapshotHelpers::saveRAWSnapshot(img, w, h, index);
-	SnapshotHelpers::savePPMSnapshot(img, w, h, index);
-	SnapshotHelpers::savePPMSnapshot_demosaic_linear(img, w, h, index);
+	saveIndex = SnapshotHelpers::getNextUnusedIndex(saveIndex);
+
+	if (saveIndex >= 0)
+	{
+		SnapshotHelpers::saveRAWSnapshot(img, w, h, saveIndex);
+		SnapshotHelpers::savePPMSnapshot(img, w, h, saveIndex);
+		SnapshotHelpers::savePPMSnapshot_demosaic_linear(img, w, h, saveIndex);
+
+		saveIndex++;
+	}
+	else
+	{
+		printf("Could not save snapshot. Image numbering exhausted\n"
+				"(i.e. all non-negative integers have been used up)\n");
+	}
 }
 
 
@@ -132,7 +144,7 @@ int main(int argc, char** argv)
 
 
 
-		int save_no = 0;
+		int save_no = SnapshotHelpers::getNextUnusedIndex();
 
 		for (int i = 0; should_view_not_save || (i < 10); i++)
 		{
@@ -162,7 +174,7 @@ int main(int argc, char** argv)
 
 					if (input->shouldTakeSnapshot())
 					{
-						saveSnapshot(buffer, w, h, save_no++);
+						saveSnapshot(buffer, w, h, save_no);
 					}
 
 					if (input->shouldQuit())
@@ -172,7 +184,7 @@ int main(int argc, char** argv)
 				}
 				else
 				{
-					saveSnapshot(buffer, w, h, save_no++);
+					saveSnapshot(buffer, w, h, save_no);
 				}
 			}
 			else
