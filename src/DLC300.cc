@@ -8,8 +8,11 @@
  */
 
 #include "DLC300.h"
+#include <assert.h>
 #include <string.h>
 #include <stdio.h>
+#include <unistd.h> //for sleep
+#include <stdlib.h> //for exit
 
 /*
  * These 15 registers are sent from the bridge chip to the image sensor for each frame we capture.
@@ -225,6 +228,8 @@ struct DlcMsgStruct
 			w = 2048;
 			h = 1536;
 			break;
+		case DLC300::RESOLUTION_UNDEFINED:
+			assert(0);
 		}
 
 		row_size_msb = w >> 8;
@@ -242,7 +247,31 @@ struct DlcMsgStruct
 int DLC300::openDevice()
 {
 	devh_ = libusb_open_device_with_vid_pid(NULL, VID, PID);
-	return devh_ ? 0 : -1;
+
+	if (!devh_) {
+		printf("libusb_open_device_with_vid_pid failed\n");
+		return -1;
+	}
+
+	if (libusb_claim_interface(devh_, 0) < 0)
+	{
+		printf("usb_claim_interface error\n");
+		libusb_close(devh_);
+		devh_ = 0;
+		return -1;
+	}
+
+	return 0;
+}
+
+void DLC300::closeDevice()
+{
+	if (devh_)
+	{
+		libusb_release_interface(devh_, 0);
+		libusb_close(devh_);
+		devh_ = 0;
+	}
 }
 
 
@@ -288,6 +317,8 @@ int DLC300::setResolution(resolutionEnum res)
 		w_ = 2048;
 		h_ = 1536;
 		break;
+	case RESOLUTION_UNDEFINED:
+		assert(0);
 	}
 
 	return 0;
@@ -342,13 +373,15 @@ DLC300::DLC300() :
 		devh_(0),
 		w_(0),
 		h_(0),
+		res_(RESOLUTION_UNDEFINED),
 		exposure_(75),
 		red_gain_(0x2C),
 		green_gain_(0x2C),
 		blue_gain_(0x2C),
 		red_offset_(0),
 		green_offset_(0),
-		blue_offset_(0)
+		blue_offset_(0),
+		debug_level_(1)
 {
 	int r = libusb_init(NULL);
 
@@ -363,29 +396,19 @@ DLC300::DLC300() :
 			printf("Could not find and open a DLC300 camera\n");
 			return;
 		}
-
-		if (libusb_claim_interface(devh_, 0) < 0)
-		{
-			printf("usb_claim_interface error\n");
-			return;
-		}
 	}
 }
 
 DLC300::~DLC300()
 {
-	if(devh_)
-	{
-		libusb_release_interface(devh_, 0);
-		libusb_close(devh_);
-		libusb_exit(NULL);
-	}
+	closeDevice();
+	libusb_exit(NULL);
 }
 
 
-void DLC300::printData(unsigned char* data, int length)
+void DLC300::printData(unsigned char* data, int length, int requestLength)
 {
-	printf("got %d bytes: \n", length);
+	printf("got %d bytes (%d requested): \n", length, requestLength);
 	for (int i = 0; i < length; i++)
 	{
 		printf("%02x ",int(data[i]));
@@ -414,8 +437,37 @@ void DLC300::read512(int warn_when_this_differ)
 
 	/*int rc = */this->read(data, sizeof(data), numTransferred, warn_when_this_differ);
 
-	printData(data, numTransferred);
+	if (debug_level_ > 1) {
+		printData(data, numTransferred, sizeof(data));
+	}
 }
+
+void DLC300::read256(int warn_when_this_differ)
+{
+	unsigned char data[0x100];
+
+	int numTransferred;
+
+	/*int rc = */this->read(data, sizeof(data), numTransferred, warn_when_this_differ);
+
+	if (debug_level_ > 1) {
+		printData(data, numTransferred, sizeof(data));
+	}
+}
+
+void DLC300::read64(int warn_when_this_differ)
+{
+	unsigned char data[64];
+
+	int numTransferred;
+
+	/*int rc = */this->read(data, sizeof(data), numTransferred, warn_when_this_differ);
+
+	if (debug_level_ > 1) {
+		printData(data, numTransferred, sizeof(data));
+	}
+}
+
 
 
 int DLC300::sendHeader()
@@ -435,6 +487,12 @@ DlcMsgStruct dlcMsg;
 
 int DLC300::write(unsigned char* data, int length, int& numTransfered)
 {
+	if (devh_ == 0)
+	{
+		printf("No valid USB device handle!\n");
+		exit(1);
+	}
+
 	const int endpoint = 2;
 	const int timeout = 4000; // ms
 
@@ -444,7 +502,12 @@ int DLC300::write(unsigned char* data, int length, int& numTransfered)
 
 	numTransfered = transferred;
 
-	printf("OUT %d bytes\n", transferred);
+	bool any_error = (rc!=0) || (transferred != length);
+
+	if (any_error || (debug_level_ > 1))
+	{
+		printf("OUT %d bytes\n", transferred);
+	}
 
 	if (rc!=0)
 	{
@@ -467,6 +530,12 @@ int DLC300::write(unsigned char* data, int length, int& numTransfered)
  */
 int DLC300::read(unsigned char* data, int length, int& numTransfered, int warn_when_this_differ)
 {
+	if (devh_ == 0)
+	{
+		printf("No valid USB device handle!\n");
+		exit(1);
+	}
+
 	const int endpoint = 0x86;
 	const int timeout = 4000; // ms
 
@@ -480,11 +549,15 @@ int DLC300::read(unsigned char* data, int length, int& numTransfered, int warn_w
 
 	if (transferred == warn_when_this_differ)
 	{
-		printf("IN %d bytes\n", transferred);
+		if (debug_level_ > 1) {
+			printf("IN %d bytes\n", transferred);
+		}
 	}
 	else
 	{
-		printf("rc = %d, requested=%d, transferred = %d%s", rc, length, transferred, transferred==length?"\n":" EXPECTED MORE DATA!!!\n");
+		if (debug_level_ > 0) {
+			printf("rc = %d, requested=%d, transferred = %d, diff = %d%s", rc, length, transferred, length-transferred, transferred==length?"\n":" EXPECTED MORE DATA!!!\n");
+		}
 	}
 
 	numTransfered = transferred;
@@ -492,21 +565,55 @@ int DLC300::read(unsigned char* data, int length, int& numTransfered, int warn_w
 	return rc;
 }
 
-
-
-void DLC300::getFrame(unsigned char* buffer, int bufferSize)
+int DLC300::restartDevice()
 {
+	printf("Trying to restart LIBUSB. closing\n");
+	closeDevice();
+	sleep(1);
+	printf("opening\n");
+	return openDevice();
+}
 
+int DLC300::getFrame(unsigned char* buffer, int bufferSize)
+{
 	sendHeader();
 
-	read512(64); // We expect 64 bytes (but requested 512)
-
+	//read512(64); // We expect 64 bytes (but requested 512)
 	int numTransferred = 0;
-	this->read(buffer, bufferSize, numTransferred); // expects all bytes
+
+	//WARNING: this is a deviation from the requests sent by the windows software,
+	//but it seems to work bette
+	this->read(buffer, bufferSize, numTransferred);
+
+	if (numTransferred != 64)
+	{
+		for (int i = 0; i < 20; i++)
+			printf("We are not in sync!\n");
+	}
+
+
+	int rc = this->read(buffer, bufferSize, numTransferred); // expects all bytes
+
+	if (rc == LIBUSB_ERROR_NO_DEVICE)
+	{
+		restartDevice();
+		return -1;
+	}
 
 	if (res_ != RESOLUTION_800x600)
 	{
 		read512(256); // we expect 256 bytes (but requested 512)
 	}
+
+	return 0;
+}
+
+int DLC300::setDebugLevel(int newDebugLevel)
+{
+	int oldDebugLevel = debug_level_;
+
+	debug_level_ = newDebugLevel;
+
+	return oldDebugLevel;
 }
 

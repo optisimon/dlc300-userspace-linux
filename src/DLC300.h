@@ -19,12 +19,16 @@ class DLC300 {
 public:
 
 	enum resolutionEnum {
+		RESOLUTION_MIN = 0,
 		RESOLUTION_640x480 = 0,
 		RESOLUTION_800x600,
 		RESOLUTION_1024x768,
 		RESOLUTION_1280x1024,
 		RESOLUTION_1600x1200,
-		RESOLUTION_2048x1536
+		RESOLUTION_2048x1536,
+		RESOLUTION_MAX = RESOLUTION_2048x1536,
+
+		RESOLUTION_UNDEFINED = -1
 	};
 
 	enum {
@@ -48,7 +52,12 @@ private:
 	int green_offset_;
 	int blue_offset_;
 
+	int debug_level_;
+
 	int openDevice();
+	void closeDevice();
+
+	int restartDevice();
 
 public:
 
@@ -59,6 +68,7 @@ public:
 	int getHeight();
 
 	int setResolution(resolutionEnum res);
+	resolutionEnum getResolution() { return res_; }
 	int setExposure(int exposure);
 
 	void setGains(int R, int G, int B);
@@ -66,8 +76,10 @@ public:
 
 	bool isPresent(); ///< @return true if camera present when the class was constructed
 
-	void printData(unsigned char* data, int length);
+	void printData(unsigned char* data, int length, int requestLength);
 
+	void read64(int warn_when_this_differ = -1);
+	void read256(int warn_when_this_differ = -1);
 	void read512(int warn_when_this_differ = -1);
 
 	int sendHeader();
@@ -76,8 +88,9 @@ public:
 
 	int read(unsigned char* data, int length, int& numTransfered, int warn_when_this_differ = -1);
 
-	void getFrame(unsigned char* buffer, int bufferSize);
+	int getFrame(unsigned char* buffer, int bufferSize);
 
+	int setDebugLevel(int newDebugLevel);
 };
 
 
