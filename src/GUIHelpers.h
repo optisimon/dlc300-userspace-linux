@@ -3,7 +3,7 @@
  *
  * Original author Simon Gustafsson (www.simong.eu/projects/dlc300)
  *
- * Copyright (c) 2012 Simon Gustafsson (www.simong.eu)
+ * Copyright (c) 2012-2015 Simon Gustafsson (www.simong.eu)
  * Do whatever you like with this code, but please refer to me as the original author.
  */
 
@@ -172,6 +172,7 @@ public:
 			printf("Unable to set %dx%d video: %s\n", w_, h_, SDL_GetError());
 			exit(1);
 		}
+		SDL_WM_SetCaption("dlc300", "dlc300");
 		clear();
 	}
 
