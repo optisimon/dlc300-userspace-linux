@@ -52,6 +52,7 @@ private:
 	int green_offset_;
 	int blue_offset_;
 
+	bool should_center_low_resolution_;
 	int debug_level_;
 
 	int openDevice();
@@ -89,6 +90,8 @@ public:
 	int read(unsigned char* data, int length, int& numTransfered, int warn_when_this_differ = -1);
 
 	int getFrame(unsigned char* buffer, int bufferSize);
+
+	void setShouldCenterLowResolution(bool doCenter);
 
 	int setDebugLevel(int newDebugLevel);
 };

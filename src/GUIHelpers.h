@@ -36,13 +36,6 @@ class SDLWindow {
 		}
 	}
 
-	void clear(SDL_Surface *screen)
-	{
-		//Slock(screen);
-		memset(screen->pixels, 0, screen->pitch*h_);
-		//Sulock(screen);
-	}
-
 	void safeDrawPixel(SDL_Surface *screen, int x, int y,
 			Uint8 R, Uint8 G, Uint8 B)
 	{
@@ -98,36 +91,63 @@ class SDLWindow {
 		}
 	}
 
-	void drawBayerAsRGB_Internal(unsigned char* img, int w, int h)
+	void getTopLeftOffset(int& posx, int& posy, int width_rgb, int height_rgb)
 	{
+		int free_x = w_ - width_rgb;
+		int free_y = h_ - height_rgb - top_text_height_;
+		
+		assert(free_x >= 0);
+		assert(free_y >= 0);
+		
+		posy = top_text_height_ + free_y/2;
+		posx = free_x/2;
+	}
 
-		assert(w/2 <= w_);
-		assert(h/2 <= h_);
+	void drawBayerAsRGB_Internal(unsigned char* img, int width_bayer, int height_bayer)
+	{
+		assert(width_bayer/2 <= w_);
+		assert(height_bayer/2 <= h_);
 
-		for (int y = 0; y < h/2; y++)
+		int posx, posy;
+		getTopLeftOffset(posx, posy, width_bayer/2, height_bayer/2);
+
+		for (int y = 0; y < height_bayer/2; y++)
 		{
-			for( int x = 0; x < w/2; x++)
+			for (int x = 0; x < width_bayer/2; x++)
 			{
-				uint8_t R  = img[(y*2  )*w + x*2 + 0];
-				uint8_t G1 = img[(y*2  )*w + x*2 + 1];
-				uint8_t G2 = img[(y*2+1)*w + x*2 + 0];
-				uint8_t B =  img[(y*2+1)*w + x*2 + 1];
-				safeDrawPixel(screen_, x, y+10, R, (G1 + G2)/2, B);
+				uint8_t R  = img[(y*2  )*width_bayer + x*2 + 0];
+				uint8_t G1 = img[(y*2  )*width_bayer + x*2 + 1];
+				uint8_t G2 = img[(y*2+1)*width_bayer + x*2 + 0];
+				uint8_t B =  img[(y*2+1)*width_bayer + x*2 + 1];
+				safeDrawPixel(screen_, x + posx, y + posy, R, (G1 + G2)/2, B);
 			}
 		}
 	}
 
-	void drawWhitebalanceRegion(unsigned char* img, int w, int h)
+	void drawWhitebalanceRegion(unsigned char* img, int width_bayer, int height_bayer)
 	{
-		int left, top, right, bottom;
+		int left_bayer, top_bayer, right_bayer, bottom_bayer;
 
-		calculateWhitebalanceRegion(w, h, left, top, right, bottom);
+		calculateWhitebalanceRegion(width_bayer, height_bayer, left_bayer, top_bayer, right_bayer, bottom_bayer);
+		
+		int posx, posy;
+		getTopLeftOffset(posx, posy, width_bayer/2, height_bayer/2);
 
 		//Divide coordinates by 2, since we only generate one pixel for each 2x2 pixel bayer pattern
 		rectangleRGBA(screen_,
-	                  left/2, top/2,
-	                  right/2, bottom/2,
+	                  posx + left_bayer/2, posy + top_bayer/2,
+	                  posx + right_bayer/2, posy + bottom_bayer/2,
 	                  255, 255, 255, 255);
+	}
+	
+	/**
+	 * Clears the internal frame buffer, but does NOT flip buffers
+	 */
+	void clearInternalFramebuffer(SDL_Surface *screen)
+	{
+		//Slock(screen);
+		memset(screen->pixels, 0, screen->pitch*h_);
+		//Sulock(screen);
 	}
 
 
@@ -135,9 +155,10 @@ class SDLWindow {
 	bool should_call_sdl_quit_;
 	const int w_;
 	const int h_;
+	enum { top_text_height_ = 10 };
 	SDL_Surface *screen_;
 public:
-	SDLWindow() : should_show_whitebalance_region_(false), should_call_sdl_quit_(true), w_(1024), h_(768+10), screen_(0)
+	SDLWindow() : should_show_whitebalance_region_(false), should_call_sdl_quit_(true), w_(1024), h_(768+top_text_height_), screen_(0)
 	{
 		if ( SDL_Init(SDL_INIT_VIDEO) < 0 )
 		{
@@ -151,9 +172,7 @@ public:
 			printf("Unable to set %dx%d video: %s\n", w_, h_, SDL_GetError());
 			exit(1);
 		}
-		clear(screen_);
-		SDL_Flip(screen_);
-		clear(screen_);
+		clear();
 	}
 
 	~SDLWindow()
@@ -162,6 +181,13 @@ public:
 			SDL_Quit();
 	}
 
+	void clear()
+	{
+		clearInternalFramebuffer(screen_);
+		SDL_Flip(screen_);
+		clearInternalFramebuffer(screen_);	
+	}
+	
 	void calculateWhitebalanceRegion(int w, int h, int& left, int& top, int& right, int& bottom)
 	{
 		const int region_scale = 4;
@@ -177,16 +203,16 @@ public:
 	 * This version does not do any kind of demosaiking, it just takes the 4x4 bayer patch,
 	 * and converts it into a single pixel without any interpolation
 	 * */
-	void drawBayerAsRGB(unsigned char* img, int w, int h)
+	void drawBayerAsRGB(unsigned char* img, int width_bayer, int height_bayer)
 	{
 		Slock(screen_);
-		//clear();
+		//clearInternalFramebuffer();
 
-		drawBayerAsRGB_Internal(img, w, h);
+		drawBayerAsRGB_Internal(img, width_bayer, height_bayer);
 
 		if (should_show_whitebalance_region_)
 		{
-			drawWhitebalanceRegion(img, w, h);
+			drawWhitebalanceRegion(img, width_bayer, height_bayer);
 		}
 
 		stringRGBA(screen_, 0, 0, "ESC = quit, F1 = take 1 snapshot, F2 = toggle taking snapshots continuously, F3 = set white balance, F4 = cycle resolution", 255, 255, 255, 255);

@@ -112,8 +112,10 @@ int main(int argc, char** argv)
 	bool should_view_not_save = true;
 	bool should_be_verbose = false;
 
+	bool should_center_lower_resolution = true;
+
 	char opt;
-	while ((opt = getopt(argc, argv, "r:e:g:bhv")) != -1)
+	while ((opt = getopt(argc, argv, "r:e:g:bchv")) != -1)
 	{
 		switch (opt)
 		{
@@ -169,6 +171,10 @@ int main(int argc, char** argv)
 		case 'b':
 			should_view_not_save = false;
 			break;
+			
+		case 'c':
+			should_center_lower_resolution = false;
+			break;
 
 		case 'v':
 			should_be_verbose = true;
@@ -183,6 +189,7 @@ int main(int argc, char** argv)
 					"-e 1..370  Sets exposure\n"
 					"-g 0..63   Sets gain (the same value is used for all channels)\n"
 					"-b         \"Blind mode\", no visual imaging. It saves a few image before exiting\n"
+					"-c         DO NOT Center cropped area in low resolution modes (possibly needed for compatibility with other cameras)\n"
 					"-v         Verbose debug output (for developers)\n"
 					"\n"
 					"\n"
@@ -210,6 +217,8 @@ int main(int argc, char** argv)
 	} else {
 		myCam.setDebugLevel(0);
 	}
+	
+	myCam.setShouldCenterLowResolution(should_center_lower_resolution);
 
 	if (myCam.isPresent())
 	{
@@ -313,6 +322,7 @@ int main(int argc, char** argv)
 						}
 
 						myCam.setResolution(DLC300::resolutionEnum(nextMode));
+						myWindow->clear();
 					}
 
 				}

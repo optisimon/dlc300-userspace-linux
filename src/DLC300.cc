@@ -381,6 +381,7 @@ DLC300::DLC300() :
 		red_offset_(0),
 		green_offset_(0),
 		blue_offset_(0),
+		should_center_low_resolution_(false),
 		debug_level_(1)
 {
 	int r = libusb_init(NULL);
@@ -472,7 +473,7 @@ void DLC300::read64(int warn_when_this_differ)
 
 int DLC300::sendHeader()
 {
-DlcMsgStruct dlcMsg;
+	DlcMsgStruct dlcMsg;
 
 	memset(&dlcMsg, 0, sizeof(dlcMsg));
 	dlcMsg.fillDefaults();
@@ -480,6 +481,20 @@ DlcMsgStruct dlcMsg;
 	dlcMsg.setExposure(exposure_);
 	dlcMsg.setGains(red_gain_, green_gain_, blue_gain_);
 
+	if (should_center_low_resolution_)
+	{
+		int full_w = 2048;
+		int full_h = 1536;
+
+		int w = (dlcMsg.row_size_msb << 8) + dlcMsg.row_size_lsb;
+		int h = (dlcMsg.col_size_msb << 8) + dlcMsg.col_size_lsb;
+
+		int free_x = full_w - w;
+		int free_y = full_h - h;
+
+		dlcMsg.setCropStart(free_x/2, free_y/2);
+	}
+	
 	int dummy;
 
 	return this->write((unsigned char*)&dlcMsg, sizeof(dlcMsg), dummy);
@@ -606,6 +621,11 @@ int DLC300::getFrame(unsigned char* buffer, int bufferSize)
 	}
 
 	return 0;
+}
+
+void DLC300::setShouldCenterLowResolution(bool doCenter)
+{
+	should_center_low_resolution_ = doCenter;
 }
 
 int DLC300::setDebugLevel(int newDebugLevel)
