@@ -191,6 +191,7 @@ int main(int argc, char** argv)
 					"-b         \"Blind mode\", no visual imaging. It saves a few image before exiting\n"
 					"-c         DO NOT Center cropped area in low resolution modes (possibly needed for compatibility with other cameras)\n"
 					"-v         Verbose debug output (for developers)\n"
+					"-h         Shows this help message\n"
 					"\n"
 					"\n"
 					"If not running in \"Blind mode\", one can use\n"
