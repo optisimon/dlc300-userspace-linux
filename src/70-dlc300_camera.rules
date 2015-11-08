@@ -1,0 +1,4 @@
+#
+# Udev rule for DLC300 camera (so sudo privileges won't be needed for running the capture tool)
+#
+SUBSYSTEMS=="usb", ENV{ID_VENDOR_ID}=="1578", ENV{ID_MODEL_ID}=="0076", MODE="0666"
