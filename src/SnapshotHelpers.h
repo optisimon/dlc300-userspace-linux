@@ -86,9 +86,10 @@ void savePPMSnapshot(unsigned char* img, int w, int h, int index)
 			uint8_t R  = img[(y*2  )*w + x*2 + 0];
 			uint8_t G1 = img[(y*2  )*w + x*2 + 1];
 			uint8_t G2 = img[(y*2+1)*w + x*2 + 0];
-			uint8_t B =  img[(y*2+1)*w + x*2 + 1];
-			char pixel[3] = {R, (G1+G2)/2, B};
-			ofs.write(pixel, 3);
+			uint8_t B  = img[(y*2+1)*w + x*2 + 1];
+			uint8_t G  = (G1+G2)/2;
+			const uint8_t pixel[3] = {R, G, B};
+			ofs.write(reinterpret_cast<const char*>(pixel), 3);
 		}
 	}
 }
@@ -152,8 +153,8 @@ void savePPMSnapshot_demosaic_linear(unsigned char* img, int w, int h, int index
 				break;
 			}
 
-			char pixel[3] = {R, G, B};
-			ofs.write(pixel, 3);
+			const uint8_t pixel[3] = {R, G, B};
+			ofs.write(reinterpret_cast<const char*>(pixel), 3);
 		}
 	}
 }
